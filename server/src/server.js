@@ -47,7 +47,7 @@ let room;
 
 //---선생 RTCPeerConnection 정의
 
-const createTeacherPc = (teacherSocket) => {
+const createTeacherPc = async (teacherSocket) => {
   const pc = new wrtc.RTCPeerConnection({
     iceServers: [
       {
@@ -97,22 +97,24 @@ const createTeacherPc = (teacherSocket) => {
         if (reConnection === 1) {
           console.log("reconnecting");
 
-          studentPc.forEach(spc => {
+          for (let spc of studentPc.values()) {
             spc.close();
-          });
+          }
 
           for (let sSock of studentPc.keys()) {
             sSock.emit("reconnect");
           }
           reConnection = 0;
+
         }
 
-        console.log("sent welcome to students");
-
-        for (let sSock of studentPc.keys()) {
-          sSock.emit("welcome");
+        else {
+          for (let sSock of studentPc.keys()) {
+            sSock.emit("welcome");
+          }
         }
 
+        
         break;
 
     }
@@ -124,7 +126,7 @@ const createTeacherPc = (teacherSocket) => {
 
 //---학생 RTCPeerConnection 정의
 
-const createStudentPc = (studentSocket) => {
+const createStudentPc = async (studentSocket) => {
   const pc = new wrtc.RTCPeerConnection({
     iceServers: [
       {
@@ -173,7 +175,7 @@ wsServer.on("connection", socket => {
   socket.on("offerteacher", async (offer) => {
     console.log("start offerteacher");
     try {
-      teacherPc = createTeacherPc(socket);
+      teacherPc = await createTeacherPc(socket);
       console.log("created pc");
     } catch (e) { console.log(e); }
     teacherPc.setRemoteDescription(offer);
@@ -193,7 +195,7 @@ wsServer.on("connection", socket => {
 
   socket.on("offerstudent", async () => {
     try {
-      studentPc.set(socket, createStudentPc(socket));
+      studentPc.set(socket, await createStudentPc(socket));
     } catch (e) { console.log(e); }
     const offer = await studentPc.get(socket).createOffer();
     studentPc.get(socket).setLocalDescription(offer);
@@ -208,22 +210,20 @@ wsServer.on("connection", socket => {
 
   socket.on("ice", (ice, role) => {
     if (role === 0) {
-      if (ice) {
-        teacherPc.addIceCandidate(
-          new wrtc.RTCIceCandidate(ice)
-        );
-        // console.log("i got ice");
-      }
-      else {
-        // console.log("i got null ice", ice);
-      }
+      let candidate = new wrtc.RTCIceCandidate(ice);
 
+      teacherPc.addIceCandidate(candidate).then(_ => {
+      }).catch(e => {
+        console.log("Error: Failure during addIceCandidate()");
+      });
     }
     else {
-      if (ice) studentPc.get(socket).addIceCandidate(
-        new wrtc.RTCIceCandidate(ice)
-      );
-      // console.log("i got ice");
+      let candidate = new wrtc.RTCIceCandidate(ice);
+
+      studentPc.get(socket).addIceCandidate(candidate).then(_ => {
+      }).catch(e => {
+        console.log("Error: Failure during addIceCandidate()");
+      });
     }
   });
 })
