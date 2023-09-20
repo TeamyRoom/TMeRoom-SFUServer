@@ -16,6 +16,7 @@ const welcomeForm = welcome.querySelector("form");
 const peersFace = document.getElementById("peersFace");
 const testFace = document.getElementById("testFace");
 const playBackForm = document.getElementById("playBack");
+const hlsForm = document.getElementById("hls");
 
 async function initCall() {
     welcome.hidden = true;
@@ -103,4 +104,6 @@ function handleAddTrack(data) {
 
     peersFace.srcObject = data.streams[0];
     peersFace.muted = true;
+
+    hlsForm.type = 'application/x-mpegURL'
 }
