@@ -98,11 +98,11 @@ const createTeacherPc = async (teacherSocket) => {
           console.log("reconnecting");
 
           for (let spc of studentPc.values()) {
-            spc.close();
+            if (spc) spc.close();
           }
 
           for (let sSock of studentPc.keys()) {
-            sSock.emit("reconnect");
+            if (sSock) sSock.emit("reconnect");
           }
           reConnection = 0;
 
@@ -112,9 +112,10 @@ const createTeacherPc = async (teacherSocket) => {
           for (let sSock of studentPc.keys()) {
             sSock.emit("welcome");
           }
+          reConnection = 1;
         }
 
-        
+
         break;
 
     }
