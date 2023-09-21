@@ -173,6 +173,13 @@ wsServer.on("connection", socket => {
     if (teacherStream) socket.emit("welcome");
   });
 
+  socket.on('hls-video-option', async (jsonMessage) => {
+    for (let sSock of studentPc.keys()) {
+      if (sSock) sSock.emit('hls-video-option', jsonMessage);
+    }
+    console.log("hls보냈다옵션");
+  })
+
   socket.on("offerteacher", async (offer) => {
     console.log("start offerteacher");
     try {
