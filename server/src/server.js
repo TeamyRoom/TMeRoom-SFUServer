@@ -1,19 +1,10 @@
 import express from "express";
 import http from "http";
-import { WebSocketServer } from "ws";
 import SocketIO from "socket.io";
-import e from "express";
-import { start } from "repl";
-import * as mediasoupClient from "mediasoup-client";
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
 
-const WebSocket = require('ws');
-
-const fs = require('fs');
-const path = require('path');
 const wrtc = require("wrtc");
-
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -35,19 +26,22 @@ app.get("/student", (req, res) => res.render("home_student"));
 
 const handleListen = () => console.log('Listening on http://localhost:3005');
 
-let writeStream;
+// let studentMap = new Map();    //소켓, peerConnection 쌍
+// let teacherPc = new Map();    //roomName, peerConnection 쌍
+// let reConnection = new Map(); //roomName, 재연결 여부(true, false) 쌍
+// let teacherStream = new Map();  //roomName, mediaStream 쌍
 
-let teacherPc;
-let teacherStream;
-let teacherSenders = {};
-let studentPc = new Map();    //소켓, peerConnection 쌍
-let reConnection = 0;
-let teacherDevice;
-let room;
+let room = {
+  teacherStream: null,
+  reConnection: false,
+}
+let roomMap = new Map();
+let teacherMap = new Map();
+let studentMap = new Map();    //소켓, peerConnection 쌍
 
 //---선생 RTCPeerConnection 정의
 
-const createTeacherPc = async (teacherSocket) => {
+const createTeacherPc = async (teacherSocket, roomName) => {
   const pc = new wrtc.RTCPeerConnection({
     iceServers: [
       {
@@ -63,7 +57,6 @@ const createTeacherPc = async (teacherSocket) => {
   });
 
   pc.onicecandidate = (e) => {
-    // console.log("I sent ice");
     teacherSocket.emit("ice", e.candidate);
   };
 
@@ -73,48 +66,46 @@ const createTeacherPc = async (teacherSocket) => {
 
   pc.ontrack = (e) => {
     console.log("input stream in ts ", e.streams[0]);
-    teacherStream = e.streams[0];
-    teacherSenders = pc.getSenders();
+    let roomTemp = Object.assign({}, roomMap.get(roomName));
+    roomTemp.teacherStream = e.streams[0];
+    roomMap.set(roomName, roomTemp);
   };
 
   pc.onconnectionstatechange = (e) => {
     console.log("tpc has changed", pc.connectionState);
     switch (pc.connectionState) {
       case "disconnected":
-        if (teacherPc) teacherPc.close();
-        teacherStream = null;
-        teacherPc = null;
-        reConnection = 1;
+        pc.close();
+        let roomTemp = Object.assign({}, roomMap.get(roomName));
+        roomTemp.reConnection = true;
+        roomMap.set(roomName, roomTemp);
         break;
       case "failed":
-        if (teacherPc) teacherPc.close();
-        teacherStream = null;
-        teacherPc = null;
-        reConnection = 1;
+        pc.close();
+        let roomTemp2 = Object.assign({}, roomMap.get(roomName));
+        roomTemp2.reConnection = true;
+        roomMap.set(roomName, roomTemp2);
         break;
       case "connected":
 
-        if (reConnection === 1) {
+        if (roomMap.get(roomName).reConnection) {
           console.log("reconnecting");
 
-          for (let spc of studentPc.values()) {
+          for (let spc of roomMap.get(roomName).studnetPc) {
             if (spc) spc.close();
           }
-
-          for (let sSock of studentPc.keys()) {
-            if (sSock) sSock.emit("reconnect");
-          }
-          reConnection = 0;
-
+          teacherSocket.to(roomName).emit("reconnect");
+          let roomTemp = Object.assign({}, roomMap.get(roomName));
+          roomTemp.reConnection = false;
+          roomMap.set(roomName, roomTemp);
         }
 
         else {
-          for (let sSock of studentPc.keys()) {
-            sSock.emit("welcome");
-          }
-          reConnection = 1;
+          teacherSocket.to(roomName).emit("welcome");
+          let roomTemp = Object.assign({}, roomMap.get(roomName));
+          roomTemp.reConnection = false;
+          roomMap.set(roomName, roomTemp);
         }
-
 
         break;
 
@@ -127,7 +118,7 @@ const createTeacherPc = async (teacherSocket) => {
 
 //---학생 RTCPeerConnection 정의
 
-const createStudentPc = async (studentSocket) => {
+const createStudentPc = async (studentSocket, roomName) => {
   const pc = new wrtc.RTCPeerConnection({
     iceServers: [
       {
@@ -143,7 +134,6 @@ const createStudentPc = async (studentSocket) => {
   });
 
   pc.onicecandidate = (e) => {
-    // console.log("I sent ice");
     studentSocket.emit("ice", e.candidate);
   };
 
@@ -151,7 +141,12 @@ const createStudentPc = async (studentSocket) => {
     //console.log(e);
   };
 
-  if (teacherStream) teacherStream.getTracks().forEach(track => pc.addTrack(track, teacherStream));
+  if (roomMap.get(roomName).teacherStream){  
+    roomMap.get(roomName)
+      .teacherStream
+      .getTracks()
+      .forEach(track => pc.addTrack(track, roomMap.get(roomName).teacherStream));
+  }
 
   return pc;
 }
@@ -161,58 +156,57 @@ const createStudentPc = async (studentSocket) => {
 wsServer.on("connection", socket => {
 
   socket.on("join_room", async (roomName) => {
-    room = roomName;
+    let roomTemp = Object.assign({}, roomMap.get(roomName));
+    roomMap.set(roomName, roomTemp);
+    teacherMap.set(socket, null);
     socket.join(roomName);
     socket.emit("welcome");
   });
 
   socket.on('join_roomstudent', async (roomName) => {
-    room = roomName;
     socket.join(roomName);
-    studentPc.set(socket, null);
-    if (teacherStream) socket.emit("welcome");
+    studentMap.set(socket, null);
+    if (roomMap.has(roomName)) socket.emit("welcome");
   });
 
-  socket.on('hls-video-option', async (jsonMessage) => {
-    for (let sSock of studentPc.keys()) {
-      if (sSock) sSock.emit('hls-video-option', jsonMessage);
-    }
-    console.log("hls보냈다옵션");
+  socket.on('hls-video-option', async (jsonMessage, roomName) => {
+    socket.to(roomName).emit('hls-video-option', jsonMessage);
   })
 
-  socket.on("offerteacher", async (offer) => {
+  socket.on("offerteacher", async (offer, roomName) => {
     console.log("start offerteacher");
     try {
-      teacherPc = await createTeacherPc(socket);
+      let tempPc = await createTeacherPc(socket, roomName);
+      teacherMap.set(socket, tempPc);
       console.log("created pc");
     } catch (e) { console.log(e); }
-    teacherPc.setRemoteDescription(offer);
+    teacherMap.get(socket).setRemoteDescription(offer);
     console.log("set remotedDescription");
-    const answer = await teacherPc.createAnswer({
+    const answer = await teacherMap.get(socket).createAnswer({
       offerToReceiveAudio: true,
       offerToReceivevideo: true,
     });
     console.log("created answer");
 
-    teacherPc.setLocalDescription(answer);
+    teacherMap.get(socket).setLocalDescription(answer);
     console.log("set localDescription");
     socket.emit("answer", answer);
 
   });
 
 
-  socket.on("offerstudent", async () => {
+  socket.on("offerstudent", async (roomName) => {
     try {
-      studentPc.set(socket, await createStudentPc(socket));
+      studentMap.set(socket, await createStudentPc(socket, roomName));
     } catch (e) { console.log(e); }
-    const offer = await studentPc.get(socket).createOffer();
-    studentPc.get(socket).setLocalDescription(offer);
+    const offer = await studentMap.get(socket).createOffer();
+    studentMap.get(socket).setLocalDescription(offer);
     socket.emit("offer", offer);
     console.log("send offer to student");
   });
 
   socket.on("answerstudent", (answer) => {
-    studentPc.get(socket).setRemoteDescription(answer);
+    studentMap.get(socket).setRemoteDescription(answer);
     console.log("i got answer from studnet");
   });
 
@@ -220,7 +214,7 @@ wsServer.on("connection", socket => {
     if (role === 0) {
       let candidate = new wrtc.RTCIceCandidate(ice);
 
-      teacherPc.addIceCandidate(candidate).then(_ => {
+      teacherMap.get(socket).addIceCandidate(candidate).then(_ => {
       }).catch(e => {
         console.log("Error: Failure during addIceCandidate()");
       });
@@ -228,7 +222,7 @@ wsServer.on("connection", socket => {
     else {
       let candidate = new wrtc.RTCIceCandidate(ice);
 
-      studentPc.get(socket).addIceCandidate(candidate).then(_ => {
+      studentMap.get(socket).addIceCandidate(candidate).then(_ => {
       }).catch(e => {
         console.log("Error: Failure during addIceCandidate()");
       });
