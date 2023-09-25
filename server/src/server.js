@@ -30,6 +30,7 @@ let room = {
   teacherStream: null,
   reConnection: false,
   hlsVideo: null,
+  teacherPc: null,
   studentPc: [],
 }
 let roomMap = new Map();
@@ -57,12 +58,8 @@ const createTeacherPc = async (teacherSocket, roomName) => {
     teacherSocket.emit("ice", e.candidate);
   };
 
-  pc.oniceconnectionstatechange = (e) => {
-    //console.log(e);
-  };
-
   pc.ontrack = (e) => {
-    console.log("input stream in ts ", e.streams[0]);
+    console.log("Teacher Stream 감지 :  ", e.streams[0]);
 
     if (roomName && roomMap.has(roomName) && e.streams[0]) {
       let roomTemp = Object.assign({}, roomMap.get(roomName));
@@ -74,23 +71,20 @@ const createTeacherPc = async (teacherSocket, roomName) => {
   };
 
   pc.onconnectionstatechange = (e) => {
-    console.log("tpc has changed", pc.connectionState);
+    console.log("teacherPeerConnection 상태 변화 : ", pc.connectionState);
     switch (pc.connectionState) {
       case "disconnected":
         pc.close();
+        break;
+      case "closed":
+        teacherSocket.disconnect();
         let roomTemp = Object.assign({}, roomMap.get(roomName));
         roomTemp.reConnection = true;
         roomMap.set(roomName, roomTemp);
         break;
-      case "failed":
-        pc.close();
-        let roomTemp2 = Object.assign({}, roomMap.get(roomName));
-        roomTemp2.reConnection = true;
-        roomMap.set(roomName, roomTemp2);
-        break;
       case "connected":
         if (roomMap.get(roomName).reConnection) {
-          console.log("reconnecting");
+          console.log("재연결");
 
           for (let spc of roomMap.get(roomName).studentPc) {
             if (spc) spc.close();
@@ -110,6 +104,8 @@ const createTeacherPc = async (teacherSocket, roomName) => {
         }
 
         break;
+
+      default: break;
 
     }
   }
@@ -139,12 +135,8 @@ const createStudentPc = async (studentSocket, roomName) => {
     studentSocket.emit("ice", e.candidate);
   };
 
-  pc.oniceconnectionstatechange = (e) => {
-    //console.log(e);
-  };
-
   if (roomMap.get(roomName).teacherStream !== undefined) {
-    console.log("Create StudentPc and get Stream : ", roomMap.get(roomName).teacherStream);
+    console.log("StudentPc 생성 & Stream 적용 : ", roomMap.get(roomName).teacherStream);
     roomMap.get(roomName)
       .teacherStream
       .getTracks()
@@ -162,16 +154,24 @@ wsServer.on("connection", socket => {
     if (!roomMap.has(roomName)) {
       let roomTemp = Object.assign({}, room);
       roomMap.set(roomName, roomTemp);
+    }
+    if (roomMap.get(roomName).teacherPc === null) {
+      socket.join(roomName);
+      socket.emit("welcome");
       teacherMap.set(socket, null);
     }
-    socket.join(roomName);
-    socket.emit("welcome");
+    else if (roomMap.get(roomName).teacherPc.connectionState === 'closed') {
+      socket.join(roomName);
+      socket.emit("welcome");
+    }
+    else socket.emit("denied");
+
   });
 
   socket.on('join_roomstudent', async (roomName) => {
     socket.join(roomName);
     studentMap.set(socket, null);
-    
+
     if (roomMap.has(roomName)) {
       if (roomMap.get(roomName).hlsVideo !== null) socket.emit('hls-video-option', roomMap.get(roomName).hlsVideo);
       socket.emit("welcome");
@@ -187,22 +187,23 @@ wsServer.on("connection", socket => {
   })
 
   socket.on("offerteacher", async (offer, roomName) => {
-    console.log("start offerteacher");
     try {
       let tempPc = await createTeacherPc(socket, roomName);
       teacherMap.set(socket, tempPc);
-      console.log("created pc");
+      let roomTemp = Object.assign({}, roomMap.get(roomName));
+      roomTemp.teacherPc = tempPc;
+      roomMap.set(roomName, roomTemp);
     } catch (e) { console.log(e); }
+
     teacherMap.get(socket).setRemoteDescription(offer);
-    console.log("set remotedDescription");
+
     const answer = await teacherMap.get(socket).createAnswer({
       offerToReceiveAudio: true,
       offerToReceivevideo: true,
     });
-    console.log("created answer");
 
     teacherMap.get(socket).setLocalDescription(answer);
-    console.log("set localDescription");
+    console.log("teacher offer 수신 & answer 송신");
     socket.emit("answer", answer);
 
   });
@@ -220,30 +221,31 @@ wsServer.on("connection", socket => {
     const offer = await studentMap.get(socket).createOffer();
     studentMap.get(socket).setLocalDescription(offer);
     socket.emit("offer", offer);
-    console.log("send offer to student");
+    console.log("student offer 송신");
   });
 
   socket.on("answerstudent", (answer) => {
     studentMap.get(socket).setRemoteDescription(answer);
-    console.log("i got answer from studnet");
+    console.log("student answer 수신");
   });
 
   socket.on("ice", (ice, role) => {
-    if (role === 0) {
-      let candidate = new wrtc.RTCIceCandidate(ice);
+    if (role === 0 && ice !== null) {
+      try {
+        const candidate = new wrtc.RTCIceCandidate(ice);
+        teacherMap.get(socket).addIceCandidate(candidate);
+      } catch(e) {
+        console.log("ICECandidate 수신 에러 : ", e);
+      }
 
-      teacherMap.get(socket).addIceCandidate(candidate).then(_ => {
-      }).catch(e => {
-        console.log("IceCandidate is null or error : ", e);
-      });
     }
-    else {
-      let candidate = new wrtc.RTCIceCandidate(ice);
-
-      studentMap.get(socket).addIceCandidate(candidate).then(_ => {
-      }).catch(e => {
-        console.log("IceCandidate is null or error : ", e);
-      });
+    else if (ice !== null) {
+      try {
+        const candidate = new wrtc.RTCIceCandidate(ice);
+        studentMap.get(socket).addIceCandidate(candidate);
+      } catch(e) {
+        console.log("ICECandidate 수신 에러 : ", e);
+      }
     }
   });
 })
