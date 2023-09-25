@@ -26,14 +26,11 @@ app.get("/student", (req, res) => res.render("home_student"));
 
 const handleListen = () => console.log('Listening on http://localhost:3005');
 
-// let studentMap = new Map();    //소켓, peerConnection 쌍
-// let teacherPc = new Map();    //roomName, peerConnection 쌍
-// let reConnection = new Map(); //roomName, 재연결 여부(true, false) 쌍
-// let teacherStream = new Map();  //roomName, mediaStream 쌍
-
 let room = {
   teacherStream: null,
   reConnection: false,
+  hlsVideo: null,
+  studentPc: [],
 }
 let roomMap = new Map();
 let teacherMap = new Map();
@@ -66,9 +63,14 @@ const createTeacherPc = async (teacherSocket, roomName) => {
 
   pc.ontrack = (e) => {
     console.log("input stream in ts ", e.streams[0]);
-    let roomTemp = Object.assign({}, roomMap.get(roomName));
-    roomTemp.teacherStream = e.streams[0];
-    roomMap.set(roomName, roomTemp);
+
+    if (roomName && roomMap.has(roomName) && e.streams[0]) {
+      let roomTemp = Object.assign({}, roomMap.get(roomName));
+      roomTemp.teacherStream = e.streams[0];
+      roomMap.set(roomName, roomTemp);
+    } else {
+      console.error("Invalid roomName or stream in the ontrack event.");
+    }
   };
 
   pc.onconnectionstatechange = (e) => {
@@ -87,12 +89,12 @@ const createTeacherPc = async (teacherSocket, roomName) => {
         roomMap.set(roomName, roomTemp2);
         break;
       case "connected":
-
         if (roomMap.get(roomName).reConnection) {
           console.log("reconnecting");
 
-          for (let spc of roomMap.get(roomName).studnetPc) {
+          for (let spc of roomMap.get(roomName).studentPc) {
             if (spc) spc.close();
+            console.log('학생커넥션 닫음');
           }
           teacherSocket.to(roomName).emit("reconnect");
           let roomTemp = Object.assign({}, roomMap.get(roomName));
@@ -141,7 +143,8 @@ const createStudentPc = async (studentSocket, roomName) => {
     //console.log(e);
   };
 
-  if (roomMap.get(roomName).teacherStream){  
+  if (roomMap.get(roomName).teacherStream !== undefined) {
+    console.log("Create StudentPc and get Stream : ", roomMap.get(roomName).teacherStream);
     roomMap.get(roomName)
       .teacherStream
       .getTracks()
@@ -156,9 +159,11 @@ const createStudentPc = async (studentSocket, roomName) => {
 wsServer.on("connection", socket => {
 
   socket.on("join_room", async (roomName) => {
-    let roomTemp = Object.assign({}, roomMap.get(roomName));
-    roomMap.set(roomName, roomTemp);
-    teacherMap.set(socket, null);
+    if (!roomMap.has(roomName)) {
+      let roomTemp = Object.assign({}, room);
+      roomMap.set(roomName, roomTemp);
+      teacherMap.set(socket, null);
+    }
     socket.join(roomName);
     socket.emit("welcome");
   });
@@ -166,10 +171,18 @@ wsServer.on("connection", socket => {
   socket.on('join_roomstudent', async (roomName) => {
     socket.join(roomName);
     studentMap.set(socket, null);
-    if (roomMap.has(roomName)) socket.emit("welcome");
+    
+    if (roomMap.has(roomName)) {
+      if (roomMap.get(roomName).hlsVideo !== null) socket.emit('hls-video-option', roomMap.get(roomName).hlsVideo);
+      socket.emit("welcome");
+    }
   });
 
   socket.on('hls-video-option', async (jsonMessage, roomName) => {
+    let roomTemp = Object.assign({}, roomMap.get(roomName));
+    roomTemp.hlsVideo = jsonMessage;
+    roomMap.set(roomName, roomTemp);
+    teacherMap.set(socket, null);
     socket.to(roomName).emit('hls-video-option', jsonMessage);
   })
 
@@ -199,6 +212,11 @@ wsServer.on("connection", socket => {
     try {
       studentMap.set(socket, await createStudentPc(socket, roomName));
     } catch (e) { console.log(e); }
+
+    let roomTemp = Object.assign({}, roomMap.get(roomName));
+    roomTemp.studentPc.push(studentMap.get(socket));
+    roomMap.set(roomName, roomTemp);
+
     const offer = await studentMap.get(socket).createOffer();
     studentMap.get(socket).setLocalDescription(offer);
     socket.emit("offer", offer);
@@ -216,7 +234,7 @@ wsServer.on("connection", socket => {
 
       teacherMap.get(socket).addIceCandidate(candidate).then(_ => {
       }).catch(e => {
-        console.log("Error: Failure during addIceCandidate()");
+        console.log("IceCandidate is null or error : ", e);
       });
     }
     else {
@@ -224,7 +242,7 @@ wsServer.on("connection", socket => {
 
       studentMap.get(socket).addIceCandidate(candidate).then(_ => {
       }).catch(e => {
-        console.log("Error: Failure during addIceCandidate()");
+        console.log("IceCandidate is null or error : ", e);
       });
     }
   });
