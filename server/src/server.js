@@ -30,6 +30,7 @@ let room = {
   teacherStream: null,
   reConnection: false,
   hlsVideo: null,
+  teacherPc: null,
   studentPc: [],
 }
 let roomMap = new Map();
@@ -162,16 +163,24 @@ wsServer.on("connection", socket => {
     if (!roomMap.has(roomName)) {
       let roomTemp = Object.assign({}, room);
       roomMap.set(roomName, roomTemp);
+    }
+    if (roomMap.get(roomName).teacherPc === null) {
+      socket.join(roomName);
+      socket.emit("welcome");
       teacherMap.set(socket, null);
     }
-    socket.join(roomName);
-    socket.emit("welcome");
+    else if (roomMap.get(roomName).teacherPc.connectionState === 'closed') {
+      socket.join(roomName);
+      socket.emit("welcome");
+    }
+    else socket.emit("denied");
+
   });
 
   socket.on('join_roomstudent', async (roomName) => {
     socket.join(roomName);
     studentMap.set(socket, null);
-    
+
     if (roomMap.has(roomName)) {
       if (roomMap.get(roomName).hlsVideo !== null) socket.emit('hls-video-option', roomMap.get(roomName).hlsVideo);
       socket.emit("welcome");
@@ -191,6 +200,9 @@ wsServer.on("connection", socket => {
     try {
       let tempPc = await createTeacherPc(socket, roomName);
       teacherMap.set(socket, tempPc);
+      let roomTemp = Object.assign({}, roomMap.get(roomName));
+      roomTemp.teacherPc = tempPc;
+      roomMap.set(roomName, roomTemp);
       console.log("created pc");
     } catch (e) { console.log(e); }
     teacherMap.get(socket).setRemoteDescription(offer);
@@ -229,7 +241,7 @@ wsServer.on("connection", socket => {
   });
 
   socket.on("ice", (ice, role) => {
-    if (role === 0) {
+    if (role === 0 && ice !== null) {
       let candidate = new wrtc.RTCIceCandidate(ice);
 
       teacherMap.get(socket).addIceCandidate(candidate).then(_ => {
@@ -237,7 +249,7 @@ wsServer.on("connection", socket => {
         console.log("IceCandidate is null or error : ", e);
       });
     }
-    else {
+    else if (ice !== null) {
       let candidate = new wrtc.RTCIceCandidate(ice);
 
       studentMap.get(socket).addIceCandidate(candidate).then(_ => {
