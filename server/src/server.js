@@ -50,6 +50,11 @@ const createTeacherPc = async (teacherSocket, roomName) => {
           "stun:stun3.l.google.com:19302",
           "stun:stun4.l.google.com:19302",
         ]
+      },
+      {
+        urls: "turn:13.209.13.37:3478", 
+        username: "your-username", // TURN 서버 사용자명
+        credential: "your-password" // TURN 서버 비밀번호
       }
     ]
   });
