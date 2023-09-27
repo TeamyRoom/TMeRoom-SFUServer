@@ -78,6 +78,9 @@ const createTeacherPc = async (teacherSocket, roomName) => {
   pc.onconnectionstatechange = (e) => {
     console.log("teacherPeerConnection 상태 변화 : ", pc.connectionState);
     switch (pc.connectionState) {
+      case "failed" :
+        pc.close();
+        break;
       case "disconnected":
         pc.close();
         break;
@@ -140,6 +143,19 @@ const createStudentPc = async (studentSocket, roomName) => {
     studentSocket.emit("ice", e.candidate);
   };
 
+  pc.onconnectionstatechange = (e) => {
+    console.log("studentPeerConnection 상태 변화 : ", pc.connectionState);
+    switch (pc.connectionState) {
+      case "failed" :
+        pc.close();
+        break;
+      case "disconnected":
+        pc.close();
+        break;
+      default : break;
+    }
+  }
+
   if (roomMap.get(roomName).teacherStream !== undefined) {
     console.log("StudentPc 생성 & Stream 적용 : ", roomMap.get(roomName).teacherStream);
     roomMap.get(roomName)
@@ -162,11 +178,13 @@ wsServer.on("connection", socket => {
     }
     if (roomMap.get(roomName).teacherPc === null) {
       socket.join(roomName);
+      console.log(roomName + " 방의 인원수 : " + wsServer.sockets.adapter.rooms.get(roomName).size);
       socket.emit("welcome");
       teacherMap.set(socket, null);
     }
     else if (roomMap.get(roomName).teacherPc.connectionState === 'closed') {
       socket.join(roomName);
+      console.log(roomName + " 방의 인원수 : " + wsServer.sockets.adapter.rooms.get(roomName).size);
       socket.emit("welcome");
     }
     else socket.emit("denied");
@@ -175,11 +193,23 @@ wsServer.on("connection", socket => {
 
   socket.on('join_roomstudent', async (roomName) => {
     socket.join(roomName);
+    console.log(roomName + " 방의 인원수 : " + wsServer.sockets.adapter.rooms.get(roomName).size);
     studentMap.set(socket, null);
 
     if (roomMap.has(roomName)) {
       if (roomMap.get(roomName).hlsVideo !== null) socket.emit('hls-video-option', roomMap.get(roomName).hlsVideo);
       socket.emit("welcome");
+    }
+  });
+
+  socket.on('disconnect', () => {
+    if(teacherMap.has(socket)) {
+      teacherMap.get(socket).close();
+      teacherMap.delete(socket);
+    }
+    else if(studentMap.has(socket)) {
+      studentMap.get(socket).close();
+      studentMap.delete(socket);
     }
   });
 
