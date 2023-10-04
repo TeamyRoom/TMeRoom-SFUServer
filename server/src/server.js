@@ -206,11 +206,11 @@ wsServer.on("connection", socket => {
   });
 
   socket.on('disconnect', () => {
-    if (teacherMap.has(socket)) {
+    if (teacherMap.get(socket)) {
       teacherMap.get(socket).close();
       teacherMap.delete(socket);
     }
-    else if (studentMap.has(socket)) {
+    else if (studentMap.get(socket)) {
       studentMap.get(socket).close();
       studentMap.delete(socket);
     }
