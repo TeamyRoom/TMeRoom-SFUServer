@@ -52,7 +52,7 @@ const createTeacherPc = async (teacherSocket, roomName) => {
         ]
       },
       {
-        urls: "turn:13.209.13.37:3478", 
+        urls: "turn:13.209.13.37:3478",
         username: "your-username", // TURN 서버 사용자명
         credential: "your-password" // TURN 서버 비밀번호
       }
@@ -78,7 +78,7 @@ const createTeacherPc = async (teacherSocket, roomName) => {
   pc.onconnectionstatechange = (e) => {
     console.log("teacherPeerConnection 상태 변화 : ", pc.connectionState);
     switch (pc.connectionState) {
-      case "failed" :
+      case "failed":
         pc.close();
         break;
       case "disconnected":
@@ -95,10 +95,13 @@ const createTeacherPc = async (teacherSocket, roomName) => {
           console.log("재연결");
 
           for (let spc of roomMap.get(roomName).studentPc) {
-            if (spc) spc.close();
-            console.log('학생커넥션 닫음');
+            const videoTrack = roomMap.get(roomName).teacherStream.getVideoTracks()[0];
+            const videoSender = spc
+              .getSenders()
+              .find((sender) => sender.track.kind === "video");
+            videoSender.replaceTrack(videoTrack);
           }
-          teacherSocket.to(roomName).emit("reconnect");
+
           let roomTemp = Object.assign({}, roomMap.get(roomName));
           roomTemp.reConnection = false;
           roomMap.set(roomName, roomTemp);
@@ -146,13 +149,13 @@ const createStudentPc = async (studentSocket, roomName) => {
   pc.onconnectionstatechange = (e) => {
     console.log("studentPeerConnection 상태 변화 : ", pc.connectionState);
     switch (pc.connectionState) {
-      case "failed" :
+      case "failed":
         pc.close();
         break;
       case "disconnected":
         pc.close();
         break;
-      default : break;
+      default: break;
     }
   }
 
@@ -203,11 +206,11 @@ wsServer.on("connection", socket => {
   });
 
   socket.on('disconnect', () => {
-    if(teacherMap.has(socket)) {
+    if (teacherMap.has(socket)) {
       teacherMap.get(socket).close();
       teacherMap.delete(socket);
     }
-    else if(studentMap.has(socket)) {
+    else if (studentMap.has(socket)) {
       studentMap.get(socket).close();
       studentMap.delete(socket);
     }
@@ -269,7 +272,7 @@ wsServer.on("connection", socket => {
       try {
         const candidate = new wrtc.RTCIceCandidate(ice);
         teacherMap.get(socket).addIceCandidate(candidate);
-      } catch(e) {
+      } catch (e) {
         console.log("ICECandidate 수신 에러 : ", e);
       }
 
@@ -278,7 +281,7 @@ wsServer.on("connection", socket => {
       try {
         const candidate = new wrtc.RTCIceCandidate(ice);
         studentMap.get(socket).addIceCandidate(candidate);
-      } catch(e) {
+      } catch (e) {
         console.log("ICECandidate 수신 에러 : ", e);
       }
     }
