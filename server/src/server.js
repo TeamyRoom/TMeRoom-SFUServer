@@ -95,11 +95,15 @@ const createTeacherPc = async (teacherSocket, roomName) => {
           console.log("재연결");
 
           for (let spc of roomMap.get(roomName).studentPc) {
-            const videoTrack = roomMap.get(roomName).teacherStream.getVideoTracks()[0];
-            const videoSender = spc
-              .getSenders()
-              .find((sender) => sender.track.kind === "video");
-            videoSender.replaceTrack(videoTrack);
+            try {
+
+
+              const videoTrack = roomMap.get(roomName).teacherStream.getVideoTracks()[0];
+              const videoSender = spc
+                .getSenders()
+                .find((sender) => sender.track.kind === "video");
+              videoSender.replaceTrack(videoTrack);
+            } catch { (e) => { console.log("재연결 에러 발생 : ", e) } }
           }
 
           let roomTemp = Object.assign({}, roomMap.get(roomName));
@@ -206,11 +210,11 @@ wsServer.on("connection", socket => {
   });
 
   socket.on('disconnect', () => {
-    if (teacherMap.has(socket)) {
+    if (teacherMap.get(socket)) {
       teacherMap.get(socket).close();
       teacherMap.delete(socket);
     }
-    else if (studentMap.has(socket)) {
+    else if (studentMap.get(socket)) {
       studentMap.get(socket).close();
       studentMap.delete(socket);
     }
