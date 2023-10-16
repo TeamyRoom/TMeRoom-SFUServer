@@ -1,8 +1,12 @@
 import express from "express";
 import http from "http";
 import SocketIO from "socket.io";
+import dotenv from "dotenv";
 
+dotenv.config();
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
+
+const url = process.env.SPRING_SERVER_URL;
 
 const wrtc = require("wrtc");
 
@@ -15,14 +19,7 @@ const wsServer = SocketIO(httpServer, {
   }
 });
 
-app.set("view engine", "pug");
-app.set("views", __dirname + "/views");
-app.engine("pug", require("pug").__express);
 
-app.use("/public", express.static(__dirname + "/public"));
-
-app.get("/", (req, res) => res.render("home_teacher"));
-app.get("/student", (req, res) => res.render("home_student"));
 
 const handleListen = () => console.log('Listening on http://localhost:3005');
 
@@ -96,7 +93,6 @@ const createTeacherPc = async (teacherSocket, roomName) => {
 
           for (let spc of roomMap.get(roomName).studentPc) {
             try {
-
 
               const videoTrack = roomMap.get(roomName).teacherStream.getVideoTracks()[0];
               const videoSender = spc
@@ -175,6 +171,26 @@ const createStudentPc = async (studentSocket, roomName) => {
 }
 
 //---소켓 통신
+
+wsServer.use((socket, next) => {
+  const accessToken = socket.handshake.query.accessToken;
+  const lecturecode = socket.handshake.query.lecturecode;
+  console.log("토큰 수신 : ", accessToken, " 강의코드 : ", lecturecode);
+
+  const apiUrl = url + `/api/v1/auth/sfu/${lecturecode}/${accessToken}`;
+
+  fetch(apiUrl)
+    .then((response) => response.json().then((json) => {
+      console.log(json.resultCode);
+      if (json.resultCode === "SUCCESS") {
+        return next();
+      }
+      return next(new Error('Invalid token'));
+    }))
+    .catch((error) => {
+      return next(new Error('Invalid token'));
+    });
+});
 
 wsServer.on("connection", socket => {
 
