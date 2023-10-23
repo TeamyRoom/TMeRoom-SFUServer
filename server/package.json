@@ -4,33 +4,19 @@
   "description": "Zoom Clone using WebRTC and Websockets",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon",
-    "start": "nodemon"
-  },
-  "devDependencies": {
-    "@babel/cli": "^7.22.10",
-    "@babel/core": "^7.22.11",
-    "@babel/node": "^7.22.10",
-    "@babel/preset-env": "^7.22.14",
-    "nodemon": "^3.0.1",
-    "pug": "^3.0.2",
-    "ws": "^8.13.0"
+    "start": "node src/server.js"
   },
   "dependencies": {
     "base64-arraybuffer": "^1.0.2",
-    "cookie-parser": "^1.4.6",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "hls.js": "^1.4.12",
-    "localtunnel": "^2.0.2",
-    "mediasoup-client": "^3.6.48",
     "msc-node": "0.0.10",
     "socket.io": "^4.7.2",
-    "video.js": "^8.5.2",
-    "videojs": "^1.0.0",
     "wrpc": "^0.0.9",
-    "wrtc": "^0.4.7"
+    "wrtc": "^0.4.7",
+    "ws": "^8.13.0"
   },
+  "type": "module",
   "main": "index.js",
   "author": ""
 }
