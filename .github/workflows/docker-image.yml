@@ -1,0 +1,108 @@
+name: tmeroom-SFUserver CI / CD with Node
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  # 참고 사이트
+  # https://docs.github.com/ko/actions/publishing-packages/publishing-docker-images
+  push_to_registry:
+    runs-on: ubuntu-latest
+    steps:
+      
+      # github action의 가상환경에 내 프로젝트를 체크아웃하기
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      # Github Secret과 local env 에 저장된 값 불러오기
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push the image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: tmeroom-sfu
+          IMAGE_TAG: ${{ github.run_number }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "Pushing image to ECR..."
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+# TODO: ArgoCD 가 참고할 쿠버네티스 배포 yaml 파일 작성하고 풀어야함. 
+  # deploy:
+  #   runs-on: ubuntu-latest
+  #   needs: push_to_registry
+  #   steps:
+
+  #     # github action의 IP가 수시로 바뀌므로
+  #     # 그 ip를 ec2의 인바운드 규칙에서 허용해야 하므로
+  #     # github action의 IP를 얻어온다.
+  #     - name: Get Github Actions IP
+  #       id: ip
+  #       uses: haythem/public-ip@v1.3
+
+  #     # ec2 IAM 계정의 access key, secret key의 계정정보 등록
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v1
+  #       with:
+  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  
+  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         aws-region: ap-northeast-2
+          
+  #     - name: Login to Amazon ECR
+  #       id: login-ecr
+  #       uses: aws-actions/amazon-ecr-login@v1
+
+  #     - name: Checkout for Kustomize repository
+  #       uses: actions/checkout@v2
+  #       with:
+  #         # kubernetes yaml 파일 저장
+  #         repository: TeamyRoom/TMeRoom-k8s-manifest # k8s yaml 파일이 있는 repo
+  #         ref: main  # branch 이름
+  #         token: ${{ secrets.ACTION_TOKEN }} # Github Action token을 발급받아서 repo secrect에 등록해줘야한다
+  #         path: TMeRoom-k8s-manifest # 최상위 경로로 repository와 동일하게 설정
+
+  #         # 새 이미지 버전으로 파일의 태그값 수정
+  #         # cd path 수정
+  #         # kustomize로 image tag 값 변경
+  #     - name: Update Kubernetes resources
+  #       run: |
+  #         pwd
+  #         ls
+  #         cd TMeRoom-k8s-manifest/overlays/prd/ 
+  #         kustomize edit set image ${{ steps.login-ecr.outputs.registry }}/tmeroom-sfu=${{ steps.login-ecr.outputs.registry }}/tmeroom-sfu:${{ github.run_number }}
+  #         cat kustomization.yaml
+  #     # 수정된 kustomization.yaml 파일 commit push
+  #     - name: Commit and Push manfiest files
+  #       uses: EndBug/add-and-commit@v9
+  #       with:
+  #         author_name: yslee96
+  #         author_email: dbstn322@gmail.com
+  #         message: "🔧   : SFU 서버 이미지 태그 업데이트 #${{ github.run_number }}"
+  #         cwd: './TMeRoom-k8s-manifest'
+  #         push: true
+
+  #     # 업로드한 artifacts를 삭제하기
+  #     - name: Remove Github Actions Artifacts
+  #       if : always()
+  #       uses: GeekyEggo/delete-artifact@v2.0.0
+  #       with:
+  #         # The name of the artifact to delete; multiple names can be supplied on new lines.
+  #         name: |
+  #           front-env
+  #           front-nginx
+  #           build-result
+  #           Dockerfile
