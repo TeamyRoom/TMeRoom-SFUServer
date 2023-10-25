@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import wrtc from 'wrtc';
+import fetch from "node-fetch";
 
 dotenv.config();
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
@@ -50,6 +51,11 @@ let room = {
 let roomMap = new Map();
 let teacherMap = new Map();
 let studentMap = new Map(); //소켓, peerConnection 쌍
+
+//---커넥션 테스트용 간단 API
+app.get("/api/v1/echo", (req, res) => {
+    res.send("Hello world!")
+})
 
 //---선생 RTCPeerConnection 정의
 
@@ -165,7 +171,7 @@ wsServer.use((socket, next) => {
     console.log('토큰 수신 : ', accessToken, ' 강의코드 : ', lecturecode);
 
     const apiUrl = url + `/api/v1/auth/sfu/${lecturecode}/${accessToken}`;
-
+    console.log('인증 요청: ' + apiUrl)
     fetch(apiUrl)
         .then((response) =>
             response.json().then((json) => {
