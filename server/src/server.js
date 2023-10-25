@@ -18,6 +18,26 @@ const wsServer = new Server(httpServer, {
     },
 });
 
+const { STUNNER_HOST, STUNNER_PORT, STUNNER_USERNAME, STUNNER_PASSWORD } = process.env
+const iceConfig = Object.freeze({
+    iceServers: [
+        {
+            urls: 'turn:' + STUNNER_HOST + ':' + STUNNER_PORT + '?transport=udp',
+            username: STUNNER_USERNAME, // TURN 서버 사용자명
+            credential: STUNNER_PASSWORD, // TURN 서버 비밀번호
+        },
+        {
+            urls: [
+                'stun:stun.l.google.com:19302',
+                'stun:stun1.l.google.com:19302',
+                'stun:stun2.l.google.com:19302',
+                'stun:stun3.l.google.com:19302',
+                'stun:stun4.l.google.com:19302',
+            ],
+        },
+    ]
+})
+
 const handleListen = () => console.log('Listening on http://localhost:3005');
 
 let room = {
@@ -34,24 +54,7 @@ let studentMap = new Map(); //소켓, peerConnection 쌍
 //---선생 RTCPeerConnection 정의
 
 const createTeacherPc = async (teacherSocket, roomName) => {
-    const pc = new wrtc.RTCPeerConnection({
-        iceServers: [
-            {
-                urls: [
-                    'stun:stun.l.google.com:19302',
-                    'stun:stun1.l.google.com:19302',
-                    'stun:stun2.l.google.com:19302',
-                    'stun:stun3.l.google.com:19302',
-                    'stun:stun4.l.google.com:19302',
-                ],
-            },
-            {
-                urls: 'turn:13.209.13.37:3478',
-                username: 'your-username', // TURN 서버 사용자명
-                credential: 'your-password', // TURN 서버 비밀번호
-            },
-        ],
-    });
+    const pc = new wrtc.RTCPeerConnection(iceConfig);
 
     pc.onicecandidate = (e) => {
         teacherSocket.emit('ice', e.candidate);
@@ -123,19 +126,7 @@ const createTeacherPc = async (teacherSocket, roomName) => {
 //---학생 RTCPeerConnection 정의
 
 const createStudentPc = async (studentSocket, roomName) => {
-    const pc = new wrtc.RTCPeerConnection({
-        iceServers: [
-            {
-                urls: [
-                    'stun:stun.l.google.com:19302',
-                    'stun:stun1.l.google.com:19302',
-                    'stun:stun2.l.google.com:19302',
-                    'stun:stun3.l.google.com:19302',
-                    'stun:stun4.l.google.com:19302',
-                ],
-            },
-        ],
-    });
+    const pc = new wrtc.RTCPeerConnection(iceConfig);
 
     pc.onicecandidate = (e) => {
         studentSocket.emit('ice', e.candidate);
