@@ -170,7 +170,7 @@ wsServer.use((socket, next) => {
     console.log('토큰 수신 : ', accessToken, ' 강의코드 : ', lecturecode);
 
     const apiUrl = url + `/api/v1/auth/sfu/${lecturecode}/${accessToken}`;
-
+    console.log('인증 요청: ' + apiUrl)
     fetch(apiUrl)
         .then((response) =>
             response.json().then((json) => {
