@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import wrtc from 'wrtc';
+import fetch from "node-fetch";
 
 dotenv.config();
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0;
