@@ -5,16 +5,38 @@ on:
     branches: ['main']
 
 jobs:
-  # 참고 사이트
-  # https://docs.github.com/ko/actions/publishing-packages/publishing-docker-images
+  setting_for_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out env files
+        uses: actions/checkout@v3
+        with:
+          repository: TeamyRoom/TMeRoom-ServerEnv
+          ref: master
+          token: ${{ secrets.ACTION_TOKEN }}
+
+      - name: Upload env file
+        uses: actions/upload-artifact@master
+        with:
+          name: sfu-env
+          path: ./sfu/.env
+          
   push_to_registry:
     runs-on: ubuntu-latest
+    needs: setting_for_build
     steps:
       
       # github action의 가상환경에 내 프로젝트를 체크아웃하기
       - name: Checkout
         uses: actions/checkout@v3
         
+      # env 다운로드
+      - name: Download env files
+        uses: actions/download-artifact@master
+        with:
+          name: sfu-env
+          path: ./server/
+          
       # Github Secret과 local env 에 저장된 값 불러오기
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -40,7 +62,6 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
 
   deploy:
     runs-on: ubuntu-latest
@@ -94,3 +115,12 @@ jobs:
           message: "🔧   : SFU 서버 이미지 태그 업데이트 #${{ github.run_number }}"
           cwd: './TMeRoom-k8s-manifest'
           push: true
+
+      # 업로드한 artifacts를 삭제하기
+      - name: Remove Github Actions Artifacts
+        if : always()
+        uses: GeekyEggo/delete-artifact@v2.0.0
+        with:
+          # The name of the artifact to delete; multiple names can be supplied on new lines.
+          name: |
+            sfu-env
