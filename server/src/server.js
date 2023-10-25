@@ -51,6 +51,11 @@ let roomMap = new Map();
 let teacherMap = new Map();
 let studentMap = new Map(); //소켓, peerConnection 쌍
 
+//---커넥션 테스트용 간단 API
+app.get("/api/v1/echo", (req, res) => {
+    res.send("Hello world!")
+})
+
 //---선생 RTCPeerConnection 정의
 
 const createTeacherPc = async (teacherSocket, roomName) => {
