@@ -164,7 +164,7 @@ jobs:
             aws ecr get-login-password --region ap-northeast-2 | sudo docker login --username AWS --password-stdin 135685504741.dkr.ecr.ap-northeast-2.amazonaws.com
             sudo docker pull 135685504741.dkr.ecr.ap-northeast-2.amazonaws.com/tmeroom-sfu:${{ github.run_number }}.${{ github.run_attempt }}
             sudo docker rm -f tmeroom-app
-            sudo docker run -p 3005:3005 -itd --name tmeroom-app 135685504741.dkr.ecr.ap-northeast-2.amazonaws.com/tmeroom-sfu:${{ github.run_number }}.${{ github.run_attempt }}
+            sudo docker run --network host -itd --name tmeroom-app 135685504741.dkr.ecr.ap-northeast-2.amazonaws.com/tmeroom-sfu:${{ github.run_number }}.${{ github.run_attempt }}
       # 등록했던 인바운드 규칙을 삭제하기
       - name: Remove Github Actions IP From Security Group
         run: |
