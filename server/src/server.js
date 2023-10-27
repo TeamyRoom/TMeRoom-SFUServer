@@ -88,6 +88,7 @@ const createTeacherPc = async (teacherSocket, roomName) => {
                 pc.close();
                 break;
             case 'closed':
+                teacherSocket.to(roomName).emit('turn-video', true);
                 teacherSocket.disconnect();
                 let roomTemp = Object.assign({}, roomMap.get(roomName));
                 roomTemp.reConnection = true;
@@ -96,12 +97,19 @@ const createTeacherPc = async (teacherSocket, roomName) => {
             case 'connected':
                 if (roomMap.get(roomName).reConnection) {
                     console.log('재연결');
-
+                    teacherSocket.to(roomName).emit('welcome');
                     for (let spc of roomMap.get(roomName).studentPc) {
                         try {
                             const videoTrack = roomMap.get(roomName).teacherStream.getVideoTracks()[0];
                             const videoSender = spc.getSenders().find((sender) => sender.track.kind === 'video');
                             videoSender.replaceTrack(videoTrack);
+
+                            let trackNum = 0;
+                            const audioSender = spc.getSenders().filter((sender) => sender.track.kind === 'audio');
+                            for (let audioTrack of roomMap.get(roomName).teacherStream.getAudioTracks()) {
+                                audioSender[trackNum].replaceTrack(audioTrack);
+                                trackNum++;
+                            }
                         } catch {
                             (e) => {
                                 console.log('재연결 에러 발생 : ', e);
@@ -213,7 +221,9 @@ wsServer.on('connection', (socket) => {
         if (roomMap.has(roomName)) {
             if (roomMap.get(roomName).hlsVideo !== null)
                 socket.emit('hls-video-option', roomMap.get(roomName).hlsVideo);
-            socket.emit('welcome');
+            if (roomMap.get(roomName).reConnection === false)
+                socket.emit('welcome');
+
         }
     });
 
@@ -297,6 +307,10 @@ wsServer.on('connection', (socket) => {
             }
         }
     });
+
+    socket.on('turn-video', (toggle, roomName) => {
+        socket.to(roomName).emit('turn-video', toggle);
+    })
 });
 
 httpServer.listen(3005, handleListen);
