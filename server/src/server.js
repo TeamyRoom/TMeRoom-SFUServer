@@ -88,6 +88,7 @@ const createTeacherPc = async (teacherSocket, roomName) => {
                 pc.close();
                 break;
             case 'closed':
+                teacherSocket.to(roomName).emit('turn-video', true);
                 teacherSocket.disconnect();
                 let roomTemp = Object.assign({}, roomMap.get(roomName));
                 roomTemp.reConnection = true;
@@ -306,6 +307,10 @@ wsServer.on('connection', (socket) => {
             }
         }
     });
+
+    socket.on('turn-video', (toggle, roomName) => {
+        socket.to(roomName).emit('turn-video', toggle);
+    })
 });
 
 httpServer.listen(3005, handleListen);
