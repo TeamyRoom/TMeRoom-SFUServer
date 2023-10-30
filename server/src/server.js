@@ -95,9 +95,10 @@ const createTeacherPc = async (teacherSocket, roomName) => {
                 roomMap.set(roomName, roomTemp);
                 break;
             case 'connected':
+                teacherSocket.to(roomName).emit('welcome');
+                teacherSocket.to(roomName).emit('turn-video', false);
                 if (roomMap.get(roomName).reConnection) {
                     console.log('재연결');
-                    teacherSocket.to(roomName).emit('welcome');
                     for (let spc of roomMap.get(roomName).studentPc) {
                         try {
                             const videoTrack = roomMap.get(roomName).teacherStream.getVideoTracks()[0];
@@ -121,7 +122,6 @@ const createTeacherPc = async (teacherSocket, roomName) => {
                     roomTemp.reConnection = false;
                     roomMap.set(roomName, roomTemp);
                 } else {
-                    teacherSocket.to(roomName).emit('welcome');
                     let roomTemp = Object.assign({}, roomMap.get(roomName));
                     roomTemp.reConnection = false;
                     roomMap.set(roomName, roomTemp);
