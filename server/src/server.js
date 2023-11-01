@@ -175,10 +175,9 @@ const createStudentPc = async (studentSocket, roomName) => {
 
 wsServer.use((socket, next) => {
     const accessToken = socket.handshake.query.accessToken;
-    const lecturecode = socket.handshake.query.lecturecode;
-    console.log('토큰 수신 : ', accessToken, ' 강의코드 : ', lecturecode);
+    console.log('토큰 수신 : ', accessToken,);
 
-    const apiUrl = url + `/api/v1/auth/sfu/${lecturecode}/${accessToken}`;
+    const apiUrl = url + `/api/v1/auth?accessToken=${accessToken}`;
     console.log('인증 요청: ' + apiUrl)
     fetch(apiUrl)
         .then((response) =>
