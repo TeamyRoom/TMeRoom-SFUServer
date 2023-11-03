@@ -23,11 +23,6 @@ const { STUNNER_HOST, STUNNER_PORT, STUNNER_USERNAME, STUNNER_PASSWORD } = proce
 const iceConfig = Object.freeze({
     iceServers: [
         {
-            urls: 'turn:' + STUNNER_HOST + ':' + STUNNER_PORT + '?transport=udp',
-            username: STUNNER_USERNAME, // TURN 서버 사용자명
-            credential: STUNNER_PASSWORD, // TURN 서버 비밀번호
-        },
-        {
             urls: [
                 'stun:stun.l.google.com:19302',
                 'stun:stun1.l.google.com:19302',
@@ -35,6 +30,11 @@ const iceConfig = Object.freeze({
                 'stun:stun3.l.google.com:19302',
                 'stun:stun4.l.google.com:19302',
             ],
+        },
+        {
+            urls: 'turn:' + STUNNER_HOST + ':' + STUNNER_PORT,
+            username: STUNNER_USERNAME, // TURN 서버 사용자명
+            credential: STUNNER_PASSWORD, // TURN 서버 비밀번호
         },
     ]
 })
